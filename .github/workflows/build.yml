@@ -70,6 +70,10 @@ jobs:
             --dart-define=ADMOB_ANDROID_NATIVE=${{ secrets.ADMOB_ANDROID_NATIVE }}
           ls -la build/app/outputs/flutter-apk/
 
+      - name: Build debug APK (for crash diagnosis)
+        continue-on-error: true
+        run: bash tool/ci_step.sh build-debug flutter build apk --debug --target-platform android-arm64
+
       - name: Build App Bundle (for Google Play)
         run: bash tool/ci_step.sh build-aab flutter build appbundle --release --target-platform android-arm64,android-arm
 
@@ -102,6 +106,7 @@ jobs:
           out="$RUNNER_TEMP/apk-out" && rm -rf "$out" && mkdir -p "$out" && cd "$out"
           cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk VoiceRealtimeTranslater-arm64.apk
           cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk VoiceRealtimeTranslater-armv7.apk
+          cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-debug.apk VoiceRealtimeTranslater-debug.apk || true
           echo "Built from ${GITHUB_SHA} (run ${GITHUB_RUN_ID})" > README.txt
           git init -q && git config user.name ci && git config user.email ci@users.noreply.github.com
           git add -A && git commit -qm "APKs from ${GITHUB_SHA}"

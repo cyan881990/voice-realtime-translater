@@ -75,7 +75,19 @@ def patch_android():
             m = m.replace("<queries>", "<queries>\n" + tts, 1)
         else:
             m = m.replace("</manifest>", "    <queries>\n" + tts + "    </queries>\n</manifest>", 1)
+    # Test builds: show Java/Kotlin crashes on screen instead of closing silently.
+    if "CrashActivity" not in m:
+        m = m.replace('android:name="${applicationName}"', 'android:name=".CrashCatcherApp"', 1)
+        m = m.replace("</application>",
+                      '        <activity android:name=".CrashActivity" android:process=":crash"\n'
+                      '            android:exported="false"\n'
+                      '            android:theme="@android:style/Theme.DeviceDefault.NoActionBar"/>\n'
+                      "    </application>", 1)
     manifest.write_text(m)
+    main_kt = next((ROOT / "android/app/src/main").rglob("MainActivity.kt"), None)
+    if main_kt is not None:
+        (main_kt.parent / "CrashCatcherApp.kt").write_text(
+            (ROOT / "tool/android_crash/CrashCatcherApp.kt").read_text())
 
     for name in ("build.gradle.kts", "build.gradle"):
         g = ROOT / "android/app" / name
@@ -86,6 +98,12 @@ def patch_android():
                    f'applicationId = "{APP_ID}"' if name.endswith("kts") else f'applicationId "{APP_ID}"', s)
         s = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", f"minSdk = {ANDROID_MIN_SDK}", s)
         s = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", f"minSdkVersion {ANDROID_MIN_SDK}", s)
+        # Test builds: no R8 code shrinking, so reflection-based plugin code is never stripped.
+        if name.endswith("kts") and "isMinifyEnabled" not in s:
+            s = s.replace('signingConfig = signingConfigs.getByName("debug")',
+                          'signingConfig = signingConfigs.getByName("debug")\n'
+                          '            isMinifyEnabled = false\n'
+                          '            isShrinkResources = false', 1)
         g.write_text(s)
     # GitHub's private-repo runners have 7 GB RAM: keep Gradle + Kotlin within it.
     props = ROOT / "android/gradle.properties"
