@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 import '../../core/app_scope.dart';
 import '../../core/languages.dart';
@@ -514,10 +513,7 @@ class _Controls extends StatelessWidget {
     if (!context.mounted) return;
     final err = s.live.lastError;
     if (err != null && err.contains('mic-permission')) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text(t.micPermission),
-        action: SnackBarAction(label: t.openSettings, onPressed: openAppSettings),
-      ));
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.micPermission)));
     } else if (err != null) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
     }
