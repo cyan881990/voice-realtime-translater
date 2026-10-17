@@ -201,7 +201,7 @@ class SettingsScreen extends StatelessWidget {
       builder: (_) => AlertDialog(
         content: ValueListenableBuilder<double?>(
           valueListenable: progress,
-          builder: (_, v, __) => Column(mainAxisSize: MainAxisSize.min, children: [
+          builder: (_, v, _) => Column(mainAxisSize: MainAxisSize.min, children: [
             Text(t.setupDownloading(t.speechModel)),
             const SizedBox(height: 12),
             LinearProgressIndicator(value: v),

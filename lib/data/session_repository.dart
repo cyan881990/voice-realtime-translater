@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:archive/archive.dart';
 import 'package:flutter/foundation.dart';
@@ -135,9 +134,9 @@ class SessionRepository extends ChangeNotifier {
         archive.addFile(ArchiveFile('sessions/${s.audioFile}', bytes.length, bytes));
       }
     }
-    final List<int>? zipped = ZipEncoder().encode(archive);
+    final zipped = ZipEncoder().encode(archive);
     final file = await _tempFile('voice-translater-backup-${_stamp()}.zip');
-    await file.writeAsBytes(zipped ?? const <int>[]);
+    await file.writeAsBytes(zipped);
     return file;
   }
 

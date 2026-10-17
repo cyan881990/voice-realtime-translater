@@ -297,8 +297,8 @@ class _ImportExportButton extends StatelessWidget {
           final f = await s.repository.exportAllJson();
           await shareFile(f, origin);
         case _IoAction.import:
-          final res = await FilePicker.platform.pickFiles(type: FileType.any);
-          final path = res?.files.single.path;
+          final picked = await FilePicker.pickFile();
+          final path = picked?.path;
           if (path == null) return;
           final n = await s.repository.importFile(File(path));
           messenger.showSnackBar(SnackBar(content: Text(t.importDone(n))));
