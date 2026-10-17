@@ -24,6 +24,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
+      - name: Free disk space
+        run: |
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/share/boost /usr/local/lib/node_modules /opt/hostedtoolcache/CodeQL || true
+          df -h / && free -h
+
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
@@ -57,13 +62,22 @@ jobs:
       - name: Build APK (one file per CPU type)
         run: |
           bash tool/ci_step.sh build-apk flutter build apk --release --split-per-abi \
+            --target-platform android-arm64,android-arm \
             --dart-define=ADMOB_ANDROID_BANNER=${{ secrets.ADMOB_ANDROID_BANNER }} \
             --dart-define=ADMOB_ANDROID_INTERSTITIAL=${{ secrets.ADMOB_ANDROID_INTERSTITIAL }} \
             --dart-define=ADMOB_ANDROID_NATIVE=${{ secrets.ADMOB_ANDROID_NATIVE }}
           ls -la build/app/outputs/flutter-apk/
 
       - name: Build App Bundle (for Google Play)
-        run: bash tool/ci_step.sh build-aab flutter build appbundle --release
+        run: bash tool/ci_step.sh build-aab flutter build appbundle --release --target-platform android-arm64,android-arm
+
+      - name: Publish logs if a step was killed
+        if: failure()
+        run: |
+          df -h / ; free -h ; dmesg 2>/dev/null | tail -20 || true
+          cd "$RUNNER_TEMP" && mkdir -p ci-logs && cd ci-logs && echo "run $GITHUB_RUN_ID (failure step)" > README.txt
+          git init -q && git config user.name ci && git config user.email ci@users.noreply.github.com
+          git add -A && git commit -qm "logs $GITHUB_RUN_ID" && git push -qf "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" HEAD:refs/heads/ci-logs-${GITHUB_JOB} || true
 
       - uses: actions/upload-artifact@v4
         with:
@@ -71,7 +85,6 @@ jobs:
           path: |
             build/app/outputs/flutter-apk/app-arm64-v8a-release.apk
             build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk
-            build/app/outputs/flutter-apk/app-x86_64-release.apk
           retention-days: 30
 
       - uses: actions/upload-artifact@v4

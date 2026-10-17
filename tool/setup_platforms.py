@@ -87,6 +87,17 @@ def patch_android():
         s = re.sub(r"minSdk\s*=\s*flutter\.minSdkVersion", f"minSdk = {ANDROID_MIN_SDK}", s)
         s = re.sub(r"minSdkVersion\s+flutter\.minSdkVersion", f"minSdkVersion {ANDROID_MIN_SDK}", s)
         g.write_text(s)
+    # GitHub's private-repo runners have 7 GB RAM: keep Gradle + Kotlin within it.
+    props = ROOT / "android/gradle.properties"
+    if props.exists():
+        lines = [l for l in props.read_text().splitlines()
+                 if not l.startswith(("org.gradle.jvmargs", "kotlin.daemon.jvmargs", "org.gradle.workers.max"))]
+        lines += [
+            "org.gradle.jvmargs=-Xmx3g -XX:MaxMetaspaceSize=1g -XX:+HeapDumpOnOutOfMemoryError",
+            "kotlin.daemon.jvmargs=-Xmx1g",
+            "org.gradle.workers.max=2",
+        ]
+        props.write_text("\n".join(lines) + "\n")
     print("android patched")
 
 
