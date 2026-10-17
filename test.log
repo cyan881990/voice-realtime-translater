@@ -1,0 +1,10 @@
+
+::group::✅ Passing tests
+✅ /home/runner/work/voice-realtime-translater/voice-realtime-translater/test/widget_test.dart: logo renders
+✅ /home/runner/work/voice-realtime-translater/voice-realtime-translater/test/core_test.dart: low voice is labelled male, high voice female
+✅ /home/runner/work/voice-realtime-translater/voice-realtime-translater/test/core_test.dart: silence is unknown
+✅ /home/runner/work/voice-realtime-translater/voice-realtime-translater/test/core_test.dart: semantic version comparison
+✅ /home/runner/work/voice-realtime-translater/voice-realtime-translater/test/core_test.dart: session JSON round trip
+::endgroup::
+
+🎉 5 tests passed.
