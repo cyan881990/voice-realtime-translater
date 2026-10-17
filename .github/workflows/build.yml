@@ -121,7 +121,7 @@ jobs:
           git add android
           if ! git diff --cached --quiet; then
             git commit -m "Add generated Android project [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push
           fi
 
   ios:
@@ -194,5 +194,5 @@ jobs:
           git add ios
           if ! git diff --cached --quiet; then
             git commit -m "Add generated iOS project [skip ci]"
-            git pull --rebase origin "${GITHUB_REF_NAME}" && git push
+            git pull --rebase --autostash origin "${GITHUB_REF_NAME}" && git push
           fi
