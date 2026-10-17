@@ -106,7 +106,9 @@ jobs:
           out="$RUNNER_TEMP/apk-out" && rm -rf "$out" && mkdir -p "$out" && cd "$out"
           cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-arm64-v8a-release.apk VoiceRealtimeTranslater-arm64.apk
           cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk VoiceRealtimeTranslater-armv7.apk
-          cp "$GITHUB_WORKSPACE"/build/app/outputs/flutter-apk/app-debug.apk VoiceRealtimeTranslater-debug.apk || true
+          # GitHub rejects files over 100 MB, so the large debug APK only goes in when it fits.
+          dbg="$GITHUB_WORKSPACE/build/app/outputs/flutter-apk/app-debug.apk"
+          if [ -f "$dbg" ] && [ "$(stat -c%s "$dbg")" -lt 95000000 ]; then cp "$dbg" VoiceRealtimeTranslater-debug.apk; fi
           echo "Built from ${GITHUB_SHA} (run ${GITHUB_RUN_ID})" > README.txt
           git init -q && git config user.name ci && git config user.email ci@users.noreply.github.com
           git add -A && git commit -qm "APKs from ${GITHUB_SHA}"
