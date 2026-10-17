@@ -1,0 +1,75 @@
+name: voice_realtime_translater
+description: Offline two-way voice translator with automatic language detection and male/female voice labels.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.0
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_localizations:
+    sdk: flutter
+  intl: ^0.20.3
+
+  # Speech: VAD + Whisper (offline, open source)
+  sherpa_onnx: ^1.13.8
+  record: ^7.1.2
+  # Translation (offline, free on-device models)
+  google_mlkit_translation: ^0.15.1
+  # Text to speech (device engine)
+  flutter_tts: ^4.2.5
+
+  # Ads, purchases, updates
+  google_mobile_ads: ^9.1.0
+  in_app_purchase: any
+  in_app_update: ^5.0.0
+
+  # Storage, files, import/export
+  shared_preferences: ^2.5.6
+  path_provider: ^2.1.6
+  path: ^1.9.0
+  archive: any
+  file_picker: any
+  audioplayers: any
+  share_plus: any
+
+  # Misc
+  package_info_plus: ^10.2.2
+  flutter_svg: ^2.3.0
+  url_launcher: ^6.3.3
+  http: ^1.6.0
+  permission_handler: ^13.0.2
+  wakelock_plus: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: any
+  flutter_launcher_icons: any
+
+flutter:
+  uses-material-design: true
+  generate: true
+  assets:
+    - assets/logo.svg
+  fonts:
+    - family: BeVietnamPro
+      fonts:
+        - asset: assets/fonts/BeVietnamPro-Regular.ttf
+          weight: 400
+        - asset: assets/fonts/BeVietnamPro-Medium.ttf
+          weight: 500
+        - asset: assets/fonts/BeVietnamPro-SemiBold.ttf
+          weight: 600
+        - asset: assets/fonts/BeVietnamPro-Bold.ttf
+          weight: 700
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  image_path: assets/icon/icon.png
+  remove_alpha_ios: true
+  adaptive_icon_background: "#0E141B"
+  adaptive_icon_foreground: assets/icon/icon_foreground.png
