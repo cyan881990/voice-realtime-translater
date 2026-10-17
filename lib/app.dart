@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/app_scope.dart';
+import 'core/diagnostics.dart';
 import 'core/theme.dart';
 import 'l10n/app_localizations.dart';
 import 'ui/screens/home_screen.dart';
@@ -30,6 +31,7 @@ class VoiceTranslaterApp extends StatelessWidget {
           GlobalWidgetsLocalizations.delegate,
           GlobalCupertinoLocalizations.delegate,
         ],
+        builder: (context, child) => DiagnosticsOverlay(child: child ?? const SizedBox.shrink()),
         home: const StartupGate(),
       ),
     );
@@ -56,15 +58,20 @@ class _StartupGateState extends State<StartupGate> {
 
   Future<void> _check() async {
     final s = context.services;
-    final ok = await s.models.speechReady() &&
-        await s.models.translationReady(s.settings.languageA, s.settings.languageB);
+    var ok = false;
+    try {
+      ok = await s.models.speechReady() &&
+          await s.models.translationReady(s.settings.languageA, s.settings.languageB);
+    } catch (e, st) {
+      Diagnostics.record(e, st, where: 'startup-check');
+    }
     if (mounted) setState(() => _ready = ok);
   }
 
   Future<void> _startBackgroundServices() async {
     final s = context.services;
-    s.ads.init();
-    s.purchases.init();
+    s.ads.init().catchError((Object e, StackTrace st) => Diagnostics.record(e, st, where: 'ads'));
+    s.purchases.init().catchError((Object e, StackTrace st) => Diagnostics.record(e, st, where: 'purchases'));
     await Future<void>.delayed(const Duration(seconds: 2));
     if (!mounted) return;
     final info = await s.updates.check(localeCode: s.settings.locale.languageCode);
