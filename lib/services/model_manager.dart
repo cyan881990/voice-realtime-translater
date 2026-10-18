@@ -70,10 +70,44 @@ class ModelManager {
     );
   }
 
+  /// Minimum plausible sizes; a truncated model file can crash the native library.
+  static const _minBytes = {
+    'silero_vad.onnx': 200000,
+    'tiny-encoder.int8.onnx': 8000000,
+    'tiny-decoder.int8.onnx': 50000000,
+    'tiny-tokens.txt': 300000,
+    'base-encoder.int8.onnx': 20000000,
+    'base-decoder.int8.onnx': 90000000,
+    'base-tokens.txt': 300000,
+  };
+
+  /// Deletes and reports model files that are missing or too small.
+  Future<void> verifyFiles(AsrModelPaths paths) async {
+    final bad = <String>[];
+    for (final path in [paths.vad, paths.encoder, paths.decoder, paths.tokens]) {
+      final f = File(path);
+      final name = p.basename(path);
+      final size = await f.exists() ? await f.length() : -1;
+      if (size < (_minBytes[name] ?? 1)) {
+        bad.add('$name ($size bytes)');
+        if (size >= 0) await f.delete();
+      }
+    }
+    if (bad.isNotEmpty) {
+      throw StateError('Speech model files are incomplete: ${bad.join(', ')}. '
+          'Restart the app to download them again.');
+    }
+  }
+
   Future<bool> speechReady() async {
     final d = (await _dir()).path;
     for (final f in _files) {
-      if (!await File(p.join(d, f.name)).exists()) return false;
+      final file = File(p.join(d, f.name));
+      if (!await file.exists()) return false;
+      if (await file.length() < (_minBytes[f.name] ?? 1)) {
+        await file.delete();
+        return false;
+      }
     }
     return true;
   }

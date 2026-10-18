@@ -7,6 +7,7 @@ import 'package:record/record.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as so;
 import 'package:wakelock_plus/wakelock_plus.dart';
 
+import '../core/breadcrumbs.dart';
 import '../core/languages.dart';
 import '../core/settings_controller.dart';
 import '../data/session_repository.dart';
@@ -71,14 +72,20 @@ class LiveSessionController extends ChangeNotifier {
 
   Future<void> _ensureEngines() async {
     final paths = await models.paths();
+    Breadcrumbs.mark('check model files');
+    await models.verifyFiles(paths);
     final key = paths.encoder;
     if (_worker == null || _workerModelKey != key) {
       _worker?.dispose();
-      _worker = await AsrWorker.spawn(paths);
+      Breadcrumbs.mark('spawn speech worker (load Whisper)');
+      _worker = await AsrWorker.spawn(paths, Breadcrumbs.path);
       _workerModelKey = key;
+      Breadcrumbs.mark('speech worker ready');
     }
     _vad?.free();
+    Breadcrumbs.mark('init sherpa bindings (main)');
     so.initBindings();
+    Breadcrumbs.mark('create VAD');
     _vad = so.VoiceActivityDetector(
       config: so.VadModelConfig(
         sileroVad: so.SileroVadModelConfig(
@@ -94,6 +101,7 @@ class LiveSessionController extends ChangeNotifier {
       ),
       bufferSizeInSeconds: 30,
     );
+    Breadcrumbs.mark('VAD ready');
   }
 
   Future<void> start() async {
@@ -102,10 +110,15 @@ class LiveSessionController extends ChangeNotifier {
     _state = LiveState.starting;
     notifyListeners();
     try {
+      Breadcrumbs.begin('start session');
+      Breadcrumbs.mark('ask mic permission');
       if (!await _recorder.hasPermission()) {
         throw StateError('mic-permission');
       }
       await _ensureEngines();
+      Breadcrumbs.mark('start microphone stream');
+      _firstAudio = true;
+      _firstVad = true;
       segments.clear();
       _lastSourceLang = null;
       _samplesSeen = 0;
@@ -124,7 +137,10 @@ class LiveSessionController extends ChangeNotifier {
       _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => notifyListeners());
       await WakelockPlus.enable();
       _state = LiveState.recording;
+      Breadcrumbs.mark('recording');
     } catch (e) {
+      Breadcrumbs.mark('start failed: $e');
+      Breadcrumbs.finish();
       lastError = e.toString();
       _state = LiveState.idle;
     }
@@ -189,6 +205,7 @@ class LiveSessionController extends ChangeNotifier {
     speechActive = false;
     pendingCount = 0;
     _state = LiveState.idle;
+    Breadcrumbs.finish();
     notifyListeners();
     return saved;
   }
@@ -209,8 +226,15 @@ class LiveSessionController extends ChangeNotifier {
     }
   }
 
+  bool _firstAudio = true;
+  bool _firstVad = true;
+
   void _onAudio(Uint8List bytes) {
     if (_state != LiveState.recording) return;
+    if (_firstAudio) {
+      _firstAudio = false;
+      Breadcrumbs.mark('first audio chunk (${bytes.length} bytes)');
+    }
     _pcm?.add(bytes);
     final samples = _pcm16ToFloat32(bytes);
     _samplesSeen += samples.length;
@@ -229,7 +253,12 @@ class LiveSessionController extends ChangeNotifier {
 
     final vad = _vad;
     if (vad == null) return;
+    if (_firstVad) Breadcrumbs.mark('first VAD input');
     vad.acceptWaveform(samples);
+    if (_firstVad) {
+      _firstVad = false;
+      Breadcrumbs.mark('VAD ok');
+    }
     final detected = vad.isDetected();
     if (detected != speechActive) {
       speechActive = detected;
@@ -254,7 +283,9 @@ class LiveSessionController extends ChangeNotifier {
     try {
       final worker = _worker;
       if (worker == null) return;
+      Breadcrumbs.mark('send ${samples.length} samples to Whisper');
       final r = await worker.transcribe(samples);
+      Breadcrumbs.mark('Whisper result lang=${r.lang}');
       if (r.text.isEmpty || _isNoise(r.text)) return;
 
       final a = settings.languageA, b = settings.languageB;
@@ -268,7 +299,9 @@ class LiveSessionController extends ChangeNotifier {
       final target = source == a ? b : a;
       _lastSourceLang = source;
 
+      Breadcrumbs.mark('translate $source>$target');
       final translated = await translator.translate(r.text, source, target);
+      Breadcrumbs.mark('translated');
       final s = Segment(
         startMs: startMs,
         endMs: endMs,

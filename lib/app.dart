@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 import 'core/app_scope.dart';
+import 'core/breadcrumbs.dart';
 import 'core/diagnostics.dart';
 import 'core/theme.dart';
 import 'l10n/app_localizations.dart';
@@ -70,6 +71,12 @@ class _StartupGateState extends State<StartupGate> {
 
   Future<void> _startBackgroundServices() async {
     final s = context.services;
+    final report = await Breadcrumbs.previousCrashReport();
+    if (report != null) {
+      Diagnostics.record(report, null, where: 'previous session crashed');
+      if (mounted) await showErrorDetails(context, report);
+      if (!mounted) return;
+    }
     s.ads.init().catchError((Object e, StackTrace st) => Diagnostics.record(e, st, where: 'ads'));
     s.purchases.init().catchError((Object e, StackTrace st) => Diagnostics.record(e, st, where: 'purchases'));
     await Future<void>.delayed(const Duration(seconds: 2));

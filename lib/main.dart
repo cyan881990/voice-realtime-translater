@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import 'app.dart';
 import 'core/app_scope.dart';
+import 'core/breadcrumbs.dart';
 import 'core/diagnostics.dart';
 import 'core/settings_controller.dart';
 import 'data/session_repository.dart';
@@ -20,6 +21,7 @@ void main() {
     WidgetsFlutterBinding.ensureInitialized();
     Diagnostics.install();
     try {
+      await Breadcrumbs.init();
       final settings = await SettingsController.load();
       final repository = await SessionRepository.open();
       final models = ModelManager(settings);

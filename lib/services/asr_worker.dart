@@ -4,6 +4,7 @@ import 'dart:typed_data';
 
 import 'package:sherpa_onnx/sherpa_onnx.dart' as so;
 
+import '../core/breadcrumbs.dart';
 import '../models/session.dart';
 import 'model_manager.dart';
 import 'voice_gender.dart';
@@ -34,13 +35,14 @@ class AsrWorker {
   final Stream<dynamic> _responses;
   int _nextId = 0;
 
-  static Future<AsrWorker> spawn(AsrModelPaths paths) async {
+  static Future<AsrWorker> spawn(AsrModelPaths paths, [String? crumbs]) async {
     final receive = ReceivePort();
     final isolate = await Isolate.spawn(_main, [
       receive.sendPort,
       paths.encoder,
       paths.decoder,
       paths.tokens,
+      crumbs,
     ]);
     final responses = receive.asBroadcastStream();
     final first = await responses.first;
@@ -75,8 +77,11 @@ class AsrWorker {
   static void _main(List<dynamic> args) {
     final reply = args[0] as SendPort;
     late final so.OfflineRecognizer recognizer;
+    final crumbs = args.length > 4 ? args[4] as String? : null;
     try {
+      Breadcrumbs.markAt(crumbs, 'worker: init sherpa bindings');
       so.initBindings();
+      Breadcrumbs.markAt(crumbs, 'worker: create Whisper recognizer');
       recognizer = so.OfflineRecognizer(so.OfflineRecognizerConfig(
         model: so.OfflineModelConfig(
           whisper: so.OfflineWhisperModelConfig(
@@ -97,6 +102,7 @@ class AsrWorker {
       reply.send(e.toString());
       return;
     }
+    Breadcrumbs.markAt(crumbs, 'worker: Whisper loaded');
 
     const pitch = VoiceGenderDetector();
     final inbox = ReceivePort();
@@ -114,14 +120,17 @@ class AsrWorker {
       var text = '';
       var lang = '';
       try {
+        Breadcrumbs.markAt(crumbs, 'worker: decode start');
         final stream = recognizer.createStream();
         stream.acceptWaveform(samples: samples, sampleRate: 16000);
         recognizer.decode(stream);
+        Breadcrumbs.markAt(crumbs, 'worker: decode done');
         final r = recognizer.getResult(stream);
         stream.free();
         text = r.text.trim();
         lang = r.lang.replaceAll(RegExp(r'[<>|]'), '').trim();
       } catch (_) {}
+      Breadcrumbs.markAt(crumbs, 'worker: pitch');
       final pr = pitch.analyse(samples);
       reply.send([id, text, lang, pr.gender.index, pr.medianHz]);
     });
