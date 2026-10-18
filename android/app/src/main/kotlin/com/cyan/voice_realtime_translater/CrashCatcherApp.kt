@@ -23,6 +23,35 @@ import kotlin.system.exitProcess
  * the app silently closing, so testers can copy it to the developer.
  */
 class CrashCatcherApp : Application() {
+    override fun onCreate() {
+        super.onCreate()
+        // Record why the previous run ended (native crashes cannot be caught in-process).
+        if (android.os.Build.VERSION.SDK_INT >= 30) {
+            try {
+                val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+                val last = am.getHistoricalProcessExitReasons(packageName, 0, 1).firstOrNull()
+                if (last != null) {
+                    val reason = when (last.reason) {
+                        android.app.ApplicationExitInfo.REASON_CRASH_NATIVE -> "native crash"
+                        android.app.ApplicationExitInfo.REASON_CRASH -> "java crash"
+                        android.app.ApplicationExitInfo.REASON_ANR -> "not responding"
+                        android.app.ApplicationExitInfo.REASON_LOW_MEMORY -> "low memory"
+                        android.app.ApplicationExitInfo.REASON_SIGNALED -> "killed by signal"
+                        android.app.ApplicationExitInfo.REASON_EXIT_SELF -> "exit self"
+                        android.app.ApplicationExitInfo.REASON_USER_REQUESTED -> "user closed"
+                        else -> "reason ${last.reason}"
+                    }
+                    java.io.File(filesDir, "last_exit.txt").writeText(
+                        "$reason, status ${last.status}, pss ${last.pss / 1024} MB, rss ${last.rss / 1024} MB\n" +
+                            "${last.description ?: ""}\n" +
+                            "${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}, " +
+                            "Android ${android.os.Build.VERSION.RELEASE} (API ${android.os.Build.VERSION.SDK_INT})"
+                    )
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
         val previous = Thread.getDefaultUncaughtExceptionHandler()
