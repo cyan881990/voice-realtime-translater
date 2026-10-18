@@ -4,6 +4,7 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/app_scope.dart';
 import 'core/breadcrumbs.dart';
 import 'core/diagnostics.dart';
+import 'core/settings_controller.dart';
 import 'core/theme.dart';
 import 'l10n/app_localizations.dart';
 import 'ui/screens/home_screen.dart';
@@ -61,7 +62,8 @@ class _StartupGateState extends State<StartupGate> {
     final s = context.services;
     var ok = false;
     try {
-      ok = await s.models.speechReady() &&
+      final needSpeech = s.settings.engine == SpeechEngine.whisper;
+      ok = (!needSpeech || await s.models.speechReady()) &&
           await s.models.translationReady(s.settings.languageA, s.settings.languageB);
     } catch (e, st) {
       Diagnostics.record(e, st, where: 'startup-check');
@@ -74,6 +76,20 @@ class _StartupGateState extends State<StartupGate> {
     final report = await Breadcrumbs.previousCrashReport();
     if (report != null) {
       Diagnostics.record(report, null, where: 'previous session crashed');
+      // The open-source speech engine crashed on this phone: switch to the
+      // phone's own recognizer so the app keeps working.
+      final engineCrash = RegExp(r'Whisper|VAD|sherpa|worker|model files|first audio')
+          .hasMatch(report);
+      if (engineCrash && s.settings.engine == SpeechEngine.whisper) {
+        s.settings.engine = SpeechEngine.device;
+        if (mounted) {
+          final t = AppLocalizations.of(context);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            duration: const Duration(seconds: 8),
+            content: Text(t.engineSwitched),
+          ));
+        }
+      }
       if (mounted) await showErrorDetails(context, report);
       if (!mounted) return;
     }

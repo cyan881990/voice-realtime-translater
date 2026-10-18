@@ -3,6 +3,10 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 enum SpeechModelSize { tiny, base }
 
+/// whisper = open-source model on the phone, auto-detects the language.
+/// device = the phone's own recognizer (most compatible), tap to choose language.
+enum SpeechEngine { whisper, device }
+
 /// User preferences, persisted with shared_preferences.
 class SettingsController extends ChangeNotifier {
   SettingsController(this._prefs);
@@ -45,6 +49,10 @@ class SettingsController extends ChangeNotifier {
   SpeechModelSize get modelSize =>
       SpeechModelSize.values[_prefs.getInt('modelSize') ?? SpeechModelSize.tiny.index];
   set modelSize(SpeechModelSize v) => _setInt('modelSize', v.index);
+
+  SpeechEngine get engine =>
+      SpeechEngine.values[_prefs.getInt('engine') ?? SpeechEngine.whisper.index];
+  set engine(SpeechEngine v) => _setInt('engine', v.index);
 
   bool get adsRemoved => _prefs.getBool('adsRemoved') ?? false;
   set adsRemoved(bool v) => _setBool('adsRemoved', v);

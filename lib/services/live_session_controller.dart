@@ -5,6 +5,8 @@ import 'package:flutter/foundation.dart';
 import 'package:intl/intl.dart';
 import 'package:record/record.dart';
 import 'package:sherpa_onnx/sherpa_onnx.dart' as so;
+import 'package:speech_to_text/speech_recognition_result.dart';
+import 'package:speech_to_text/speech_to_text.dart';
 import 'package:wakelock_plus/wakelock_plus.dart';
 
 import '../core/breadcrumbs.dart';
@@ -68,6 +70,117 @@ class LiveSessionController extends ChangeNotifier {
 
   bool get isActive => _state == LiveState.recording || _state == LiveState.paused;
 
+  // ------------------------------------------------ device recognizer engine
+  // Uses the phone's built-in speech recognizer (Google / Apple). Works on
+  // almost every device; each person taps their language button to speak.
+  final SpeechToText _stt = SpeechToText();
+  bool _sttReady = false;
+  bool get usesDeviceEngine => settings.engine == SpeechEngine.device;
+
+  /// Language currently being listened to in device mode (null = waiting).
+  String? listeningLang;
+
+  /// Words heard so far in the current device-mode turn.
+  String partialText = '';
+
+  Future<void> _startDevice() async {
+    Breadcrumbs.mark('device recognizer: initialize');
+    if (!_sttReady) {
+      _sttReady = await _stt.initialize(
+        onError: (e) {
+          Breadcrumbs.mark('device recognizer error: ${e.errorMsg}');
+          if (e.permanent) {
+            listeningLang = null;
+            partialText = '';
+            notifyListeners();
+          }
+        },
+        onStatus: (st) {
+          if ((st == 'done' || st == 'notListening') && listeningLang != null && partialText.isEmpty) {
+            listeningLang = null;
+            notifyListeners();
+          }
+        },
+      );
+    }
+    if (!_sttReady) throw StateError('device-recognizer-unavailable');
+    Breadcrumbs.mark('device recognizer ready');
+  }
+
+  /// Device mode: listen to one turn in [lang], then translate it.
+  Future<void> listenTurn(String lang) async {
+    if (_state != LiveState.recording || !usesDeviceEngine) return;
+    if (listeningLang != null) await _stt.stop();
+    listeningLang = lang;
+    partialText = '';
+    notifyListeners();
+    final locale = languageByCode(lang).ttsLocale.replaceAll('-', '_');
+    final startMs = _clock.elapsedMilliseconds;
+    await _stt.listen(
+      onResult: (SpeechRecognitionResult r) {
+        partialText = r.recognizedWords;
+        if (r.finalResult) {
+          final text = partialText.trim();
+          final from = listeningLang ?? lang;
+          listeningLang = null;
+          partialText = '';
+          if (text.isNotEmpty) {
+            pendingCount++;
+            _queue = _queue.then((_) => _translateText(text, from, startMs, _clock.elapsedMilliseconds));
+          }
+        }
+        notifyListeners();
+      },
+      onSoundLevelChange: (level) {
+        // Android reports roughly -2..10 dB, iOS 0..-160.
+        final v = level > 0 ? (level / 10).clamp(0.05, 1.0) : 0.05;
+        levels
+          ..removeAt(0)
+          ..add(v.toDouble());
+      },
+      listenOptions: SpeechListenOptions(
+        localeId: locale,
+        partialResults: true,
+        listenMode: ListenMode.dictation,
+        pauseFor: Duration(milliseconds: (settings.silenceSeconds * 1000).round() + 1200),
+        listenFor: const Duration(seconds: 60),
+        cancelOnError: true,
+        autoPunctuation: true,
+      ),
+    );
+  }
+
+  Future<void> stopTurn() async {
+    if (listeningLang == null) return;
+    await _stt.stop();
+  }
+
+  Future<void> _translateText(String text, String source, int startMs, int endMs) async {
+    try {
+      final a = settings.languageA, b = settings.languageB;
+      final target = source == a ? b : a;
+      final translated = await translator.translate(text, source, target);
+      final s = Segment(
+        startMs: startMs,
+        endMs: endMs,
+        sourceLang: source,
+        targetLang: target,
+        sourceText: text,
+        translatedText: translated,
+      );
+      segments.add(s);
+      notifyListeners();
+      if (settings.autoReadAloud && _state == LiveState.recording) {
+        await tts.speak(s.translatedText, s.targetLang, s.gender);
+      }
+    } catch (e) {
+      lastError = e.toString();
+    } finally {
+      pendingCount = (pendingCount - 1).clamp(0, 1 << 30);
+      notifyListeners();
+    }
+  }
+
   Future<bool> hasMicPermission() => _recorder.hasPermission();
 
   Future<void> _ensureEngines() async {
@@ -115,13 +228,26 @@ class LiveSessionController extends ChangeNotifier {
       if (!await _recorder.hasPermission()) {
         throw StateError('mic-permission');
       }
+      segments.clear();
+      _lastSourceLang = null;
+      _samplesSeen = 0;
+      if (usesDeviceEngine) {
+        await _startDevice();
+        _pcm = null;
+        _clock
+          ..reset()
+          ..start();
+        _ticker = Timer.periodic(const Duration(milliseconds: 250), (_) => notifyListeners());
+        await WakelockPlus.enable();
+        _state = LiveState.recording;
+        Breadcrumbs.mark('recording (device recognizer)');
+        notifyListeners();
+        return;
+      }
       await _ensureEngines();
       Breadcrumbs.mark('start microphone stream');
       _firstAudio = true;
       _firstVad = true;
-      segments.clear();
-      _lastSourceLang = null;
-      _samplesSeen = 0;
       _pcm = settings.saveAudio ? BytesBuilder(copy: false) : null;
       final stream = await _recorder.startStream(const RecordConfig(
         encoder: AudioEncoder.pcm16bits,
@@ -149,7 +275,11 @@ class LiveSessionController extends ChangeNotifier {
 
   Future<void> pause() async {
     if (_state != LiveState.recording) return;
-    await _recorder.pause();
+    if (usesDeviceEngine) {
+      await stopTurn();
+    } else {
+      await _recorder.pause();
+    }
     _clock.stop();
     _state = LiveState.paused;
     notifyListeners();
@@ -157,7 +287,7 @@ class LiveSessionController extends ChangeNotifier {
 
   Future<void> resume() async {
     if (_state != LiveState.paused) return;
-    await _recorder.resume();
+    if (!usesDeviceEngine) await _recorder.resume();
     _clock.start();
     _state = LiveState.recording;
     notifyListeners();
@@ -168,13 +298,19 @@ class LiveSessionController extends ChangeNotifier {
     if (!isActive) return null;
     _state = LiveState.finishing;
     notifyListeners();
-    await _sub?.cancel();
-    _sub = null;
-    await _recorder.stop();
+    if (usesDeviceEngine) {
+      await _stt.stop();
+      listeningLang = null;
+      partialText = '';
+    } else {
+      await _sub?.cancel();
+      _sub = null;
+      await _recorder.stop();
+    }
     _clock.stop();
     _ticker?.cancel();
     final vad = _vad;
-    if (vad != null) {
+    if (vad != null && !usesDeviceEngine) {
       vad.flush();
       _drainVad(vad);
     }

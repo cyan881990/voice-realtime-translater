@@ -95,5 +95,14 @@
   "retry": "Thử lại",
   "micPermission": "Cần quyền micro để ghi âm và dịch.",
   "openSettings": "Mở cài đặt",
-  "renameHint": "Tên"
+  "renameHint": "Tên",
+  "speechEngine": "Bộ nhận dạng giọng nói",
+  "engineWhisper": "Tự nhận ngôn ngữ (mô hình offline)",
+  "engineDeviceLong": "Nhận dạng của điện thoại (tương thích nhất)",
+  "engineDevice": "Nhận dạng giọng nói của điện thoại",
+  "engineHint": "Nếu app tắt khi bấm Bắt đầu, hãy dùng nhận dạng của điện thoại. Mỗi người bấm nút ngôn ngữ của mình rồi nói.",
+  "engineSwitched": "Mô hình giọng nói offline bị lỗi trên máy này nên app đã chuyển sang bộ nhận dạng của điện thoại. Bạn có thể đổi lại trong Cài đặt.",
+  "useDeviceEngine": "Dùng nhận dạng của máy",
+  "tapToSpeakTitle": "Bấm ngôn ngữ của bạn rồi nói",
+  "speakIn": "Nói {language}"
 }

@@ -66,6 +66,32 @@ class SettingsScreen extends StatelessWidget {
                     onTap: () => checkForUpdatesManually(context),
                   ),
                 ]),
+                _Section(title: t.speechEngine, children: [
+                  RadioGroup<SpeechEngine>(
+                    groupValue: st.engine,
+                    onChanged: (v) async {
+                      if (v == null || s.live.isActive) return;
+                      st.engine = v;
+                      if (v == SpeechEngine.whisper && !await s.models.speechReady() && context.mounted) {
+                        await _downloadModel(context);
+                      }
+                    },
+                    child: Column(children: [
+                      RadioListTile<SpeechEngine>(
+                        value: SpeechEngine.whisper,
+                        title: Text(t.engineWhisper),
+                      ),
+                      RadioListTile<SpeechEngine>(
+                        value: SpeechEngine.device,
+                        title: Text(t.engineDeviceLong),
+                      ),
+                    ]),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+                    child: Text(t.engineHint, style: TextStyle(fontSize: 12, color: c.muted, height: 1.4)),
+                  ),
+                ]),
                 _Section(title: t.translation, children: [
                   ListTile(
                     title: Text(t.languagePair),

@@ -142,11 +142,12 @@ class ModelManager {
     required String languageA,
     required String languageB,
     required void Function(String label, double progress) onProgress,
+    bool speech = true,
   }) async {
     final d = (await _dir()).path;
     final client = http.Client();
     try {
-      for (final f in _files) {
+      for (final f in speech ? _files : const <_RemoteFile>[]) {
         final target = File(p.join(d, f.name));
         if (await target.exists()) continue;
         final part = File('${target.path}.part');

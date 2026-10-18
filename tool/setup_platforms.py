@@ -61,6 +61,14 @@ def patch_android():
     else:
         m = re.sub(r'(com\.google\.android\.gms\.ads\.APPLICATION_ID"\s*android:value=")[^"]*"',
                    rf'\g<1>{ANDROID_ADMOB}"', m)
+    if "android.speech.RecognitionService" not in m:
+        rec = ('        <intent>\n'
+               '            <action android:name="android.speech.RecognitionService"/>\n'
+               '        </intent>\n')
+        if "<queries>" in m:
+            m = m.replace("<queries>", "<queries>\n" + rec, 1)
+        else:
+            m = m.replace("</manifest>", "    <queries>\n" + rec + "    </queries>\n</manifest>", 1)
     if "android.intent.action.TTS_SERVICE" not in m:
         tts = (
             '        <intent>\n'
@@ -142,6 +150,8 @@ def patch_ios():
     plist_set(plist, "CFBundleDisplayName", "string", IOS_DISPLAY_NAME)
     plist_set(plist, "NSMicrophoneUsageDescription", "string",
               "The microphone is used to hear the conversation so it can be translated on your device.")
+    plist_set(plist, "NSSpeechRecognitionUsageDescription", "string",
+              "Speech recognition turns what is said into text so it can be translated.")
     plist_set(plist, "GADApplicationIdentifier", "string", IOS_ADMOB)
     plist_set(plist, "ITSAppUsesNonExemptEncryption", "bool", "false")
     text = plist.read_text()

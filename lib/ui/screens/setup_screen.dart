@@ -31,6 +31,7 @@ class _SetupScreenState extends State<SetupScreen> {
       await s.models.ensureAll(
         languageA: s.settings.languageA,
         languageB: s.settings.languageB,
+        speech: s.settings.engine == SpeechEngine.whisper,
         onProgress: (label, p) {
           if (mounted) {
             setState(() {

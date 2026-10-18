@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/app_scope.dart';
 import '../../core/languages.dart';
+import '../../core/settings_controller.dart';
 import '../../core/theme.dart';
 import '../../l10n/app_localizations.dart';
 import '../../models/session.dart';
@@ -184,7 +185,7 @@ class _PairCard extends StatelessWidget {
       child: Column(children: [
         Row(children: [
           Expanded(
-            child: Text(t.autoDetect,
+            child: Text(s.live.usesDeviceEngine ? t.tapToSpeakTitle : t.autoDetect,
                 style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: c.muted)),
           ),
           Flexible(
@@ -340,7 +341,8 @@ class _Chips extends StatelessWidget {
             const SizedBox(width: 6),
             Text(t.offlineFree),
           ])),
-          if (s.settings.voiceLabels) chip(Text(t.voiceDetection)),
+          if (s.settings.voiceLabels && !s.live.usesDeviceEngine) chip(Text(t.voiceDetection)),
+          if (s.live.usesDeviceEngine) chip(Text(t.engineDevice)),
         ]),
       ),
     );
@@ -357,7 +359,9 @@ class _Conversation extends StatelessWidget {
     final t = AppLocalizations.of(context);
     final c = context.colors;
     final segs = live.segments;
-    final showPending = live.isActive && (live.speechActive || live.pendingCount > 0);
+    final devicePartial = live.usesDeviceEngine && live.listeningLang != null;
+    final showPending =
+        live.isActive && (live.speechActive || live.pendingCount > 0 || devicePartial);
     if (segs.isEmpty && !showPending) {
       return Center(
         child: Padding(
@@ -375,7 +379,9 @@ class _Conversation extends StatelessWidget {
       itemBuilder: (context, i) {
         if (showPending && i == 0) {
           return Align(
-            alignment: Alignment.centerLeft,
+            alignment: devicePartial && live.listeningLang == s.settings.languageB
+                ? Alignment.centerRight
+                : Alignment.centerLeft,
             child: Container(
               margin: const EdgeInsets.only(bottom: 10),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
@@ -388,8 +394,13 @@ class _Conversation extends StatelessWidget {
                 const SizedBox(
                     width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2)),
                 const SizedBox(width: 10),
-                Text(live.speechActive ? t.listening : t.processing,
-                    style: TextStyle(color: c.accentText, fontSize: 13)),
+                Flexible(
+                  child: Text(
+                      devicePartial && live.partialText.isNotEmpty
+                          ? live.partialText
+                          : (live.speechActive || devicePartial ? t.listening : t.processing),
+                      style: TextStyle(color: c.accentText, fontSize: 13)),
+                ),
               ]),
             ),
           );
@@ -474,6 +485,21 @@ class _Controls extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 10),
+            if (live.usesDeviceEngine && recording) ...[
+              Row(children: [
+                for (final code in [s.settings.languageA, s.settings.languageB]) ...[
+                  if (code == s.settings.languageB) const SizedBox(width: 10),
+                  Expanded(
+                    child: _TurnButton(
+                      label: t.speakIn(languageByCode(code).nativeName),
+                      active: live.listeningLang == code,
+                      onTap: () => live.listeningLang == code ? live.stopTurn() : live.listenTurn(code),
+                    ),
+                  ),
+                ],
+              ]),
+              const SizedBox(height: 12),
+            ],
           ],
           Row(
             mainAxisAlignment:
@@ -515,7 +541,17 @@ class _Controls extends StatelessWidget {
     if (err != null && err.contains('mic-permission')) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.micPermission)));
     } else if (err != null) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(err)));
+      final canSwitch = !s.live.usesDeviceEngine;
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        duration: const Duration(seconds: 10),
+        content: Text(err),
+        action: canSwitch
+            ? SnackBarAction(
+                label: t.useDeviceEngine,
+                onPressed: () => s.settings.engine = SpeechEngine.device,
+              )
+            : null,
+      ));
     }
   }
 
@@ -534,6 +570,41 @@ class _Controls extends StatelessWidget {
     ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(t.sessionSaved)));
     await Navigator.of(context).push(
       MaterialPageRoute<void>(builder: (_) => SessionDetailScreen(sessionId: saved.id)),
+    );
+  }
+}
+
+/// Device-recognizer mode: one big button per language; tap, speak, done.
+class _TurnButton extends StatelessWidget {
+  const _TurnButton({required this.label, required this.active, required this.onTap});
+  final String label;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final c = context.colors;
+    return Material(
+      color: active ? Brand.amber : c.surface2,
+      borderRadius: BorderRadius.circular(16),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: onTap,
+        child: SizedBox(
+          height: 56,
+          child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+            Icon(active ? Icons.graphic_eq_rounded : Icons.mic_none_rounded,
+                size: 20, color: active ? Brand.onAmber : null),
+            const SizedBox(width: 8),
+            Flexible(
+              child: Text(label,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                      fontWeight: FontWeight.w600, color: active ? Brand.onAmber : null)),
+            ),
+          ]),
+        ),
+      ),
     );
   }
 }

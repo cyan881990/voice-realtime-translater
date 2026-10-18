@@ -1,7 +1,7 @@
 name: voice_realtime_translater
 description: Offline two-way voice translator with automatic language detection and male/female voice labels.
 publish_to: none
-version: 1.0.2+3
+version: 1.0.3+4
 
 environment:
   sdk: ^3.12.0
@@ -41,6 +41,7 @@ dependencies:
   url_launcher: ^6.3.3
   http: ^1.6.0
   wakelock_plus: any
+  speech_to_text: ^7.5.0
 
 dev_dependencies:
   flutter_test:
